@@ -14,6 +14,7 @@ public class AppDbContext : IdentityDbContext<User>
     public DbSet<Friend> Friends { get; set; }
     public DbSet<FlashcardCategory> FlashcardCategories { get; set; }
     public DbSet<Flashcard> Flashcards { get; set; }
+    public DbSet<Lesson> Lessons { get; set; } 
     public DbSet<UserProgress> UserProgress { get; set; }
     public DbSet<Lobby> Lobbies { get; set; }
     public DbSet<LobbyParticipant> LobbyParticipants { get; set; }
@@ -66,7 +67,7 @@ public class AppDbContext : IdentityDbContext<User>
             entity.Property(f => f.Tags).HasColumnType("varchar[]");
             entity.Property(f => f.Difficulty).HasMaxLength(20).HasDefaultValue("Medium");
             entity.Property(f => f.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
-            entity.HasOne<FlashcardCategory>().WithMany().HasForeignKey(f => f.CategoryId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne<Lesson>().WithMany().HasForeignKey(f => f.LessonId).OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<UserProgress>(entity =>
