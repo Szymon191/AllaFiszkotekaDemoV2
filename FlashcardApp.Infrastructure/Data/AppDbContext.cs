@@ -1,5 +1,5 @@
 ﻿using FlashcardApp.Core.Auth.Models;
-using FlashcardApp.Core.Models; // Utwórz folder Models i dodaj klasy poniżej
+using FlashcardApp.Core.Models;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
@@ -14,7 +14,7 @@ public class AppDbContext : IdentityDbContext<User>
     public DbSet<Friend> Friends { get; set; }
     public DbSet<FlashcardCategory> FlashcardCategories { get; set; }
     public DbSet<Flashcard> Flashcards { get; set; }
-    public DbSet<Lesson> Lessons { get; set; } 
+    public DbSet<Lesson> Lessons { get; set; }
     public DbSet<UserProgress> UserProgress { get; set; }
     public DbSet<Lobby> Lobbies { get; set; }
     public DbSet<LobbyParticipant> LobbyParticipants { get; set; }
@@ -33,7 +33,7 @@ public class AppDbContext : IdentityDbContext<User>
             entity.Property(u => u.StreakCount).HasDefaultValue(0);
             entity.Property(u => u.ConsecutiveDays).HasDefaultValue(0);
             entity.Property(u => u.SubscriptionType).HasMaxLength(50).HasDefaultValue("Free");
-            entity.Property(u => u.SubscriptionEndDate);
+            entity.Property(u => u.SubscriptionEndDate).IsRequired(false); // Nullable
             entity.Property(u => u.EmailVerified).HasDefaultValue(false);
             entity.Property(u => u.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
         });
@@ -45,8 +45,8 @@ public class AppDbContext : IdentityDbContext<User>
             entity.HasIndex(f => new { f.UserId1, f.UserId2 }).IsUnique();
             entity.Property(f => f.Status).HasMaxLength(20).HasDefaultValue("Pending");
             entity.Property(f => f.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
-            entity.HasOne<User>().WithMany().HasForeignKey(f => f.UserId1).OnDelete(DeleteBehavior.Cascade);
-            entity.HasOne<User>().WithMany().HasForeignKey(f => f.UserId2).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne<User>().WithMany().HasForeignKey(f => f.UserId1).OnDelete(DeleteBehavior.Restrict); // Zmiana na Restrict, aby uniknąć kaskady
+            entity.HasOne<User>().WithMany().HasForeignKey(f => f.UserId2).OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<FlashcardCategory>(entity =>
@@ -58,12 +58,20 @@ public class AppDbContext : IdentityDbContext<User>
             entity.HasOne<User>().WithMany().HasForeignKey(fc => fc.UserId).OnDelete(DeleteBehavior.Cascade);
         });
 
+        modelBuilder.Entity<Lesson>(entity =>
+        {
+            entity.HasKey(l => l.Id);
+            entity.Property(l => l.Name).HasMaxLength(100).IsRequired();
+            entity.Property(l => l.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+            entity.HasOne<FlashcardCategory>().WithMany().HasForeignKey(l => l.CategoryId).OnDelete(DeleteBehavior.Cascade);
+        });
+
         modelBuilder.Entity<Flashcard>(entity =>
         {
             entity.HasKey(f => f.Id);
             entity.Property(f => f.Word).HasMaxLength(100).IsRequired();
             entity.Property(f => f.Translation).HasMaxLength(100).IsRequired();
-            entity.Property(f => f.ExampleUsage);
+            entity.Property(f => f.ExampleUsage).HasMaxLength(500);
             entity.Property(f => f.Tags).HasColumnType("varchar[]");
             entity.Property(f => f.Difficulty).HasMaxLength(20).HasDefaultValue("Medium");
             entity.Property(f => f.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
@@ -118,7 +126,7 @@ public class AppDbContext : IdentityDbContext<User>
             entity.HasKey(n => n.Id);
             entity.Property(n => n.NotificationType).HasMaxLength(50).IsRequired();
             entity.Property(n => n.Title).HasMaxLength(100).IsRequired();
-            entity.Property(n => n.Message).IsRequired();
+            entity.Property(n => n.Message).HasMaxLength(500).IsRequired();
             entity.Property(n => n.IsRead).HasDefaultValue(false);
             entity.Property(n => n.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
             entity.HasOne<User>().WithMany().HasForeignKey(n => n.UserId).OnDelete(DeleteBehavior.Cascade);

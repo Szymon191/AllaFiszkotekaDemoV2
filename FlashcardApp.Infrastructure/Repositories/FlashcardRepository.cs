@@ -47,4 +47,14 @@ public class FlashcardRepository : IFlashcardRepository
             await _context.SaveChangesAsync();
         }
     }
+
+    public Task<IEnumerable<Flashcard>> GetByCategoryIdAsync(int categoryId)
+    {
+        throw new NotImplementedException();
+    }
+
+    public Task<IEnumerable<Flashcard>> SearchByWordAsync(string word)
+    {
+        throw new NotImplementedException();
+    }
 }

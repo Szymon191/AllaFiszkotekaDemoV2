@@ -21,6 +21,11 @@ builder.Services.AddScoped<IFlashcardCategoryRepository, FlashcardCategoryReposi
 builder.Services.AddScoped<IFlashcardRepository, FlashcardRepository>();
 builder.Services.AddScoped<ILessonRepository, LessonRepository>();
 builder.Services.AddScoped<IFlashcardRepository, FlashcardRepository>();
+builder.Services.AddScoped<IFlashcardCategoryRepository, FlashcardCategoryRepository>();
+builder.Services.AddScoped<ILessonRepository, LessonRepository>();
+builder.Services.AddScoped<IFlashcardRepository, FlashcardRepository>();
+
+
 // Configure AutoMapper
 builder.Services.AddAutoMapper(typeof(AuthProfile)); // U¿yj typu profilu
 

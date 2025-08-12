@@ -1,6 +1,6 @@
-﻿using FlashcardApp.Core.Models;
+﻿using FlashcardApp.Core.DTO;
+using FlashcardApp.Core.Models;
 using FlashcardApp.Core.Repositories;
-using FlashcardApp.Infrastructure.Repositories;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
@@ -14,18 +14,48 @@ namespace FlashcardApp.Web.Controllers
     public class FlashcardController : ControllerBase
     {
         private readonly IFlashcardRepository _flashcardRepository;
-        private readonly IFlashcardCategoryRepository _categoryRepository;
         private readonly ILessonRepository _lessonRepository;
+        private readonly IFlashcardCategoryRepository _categoryRepository;
 
-        public FlashcardController(IFlashcardRepository flashcardRepository, IFlashcardCategoryRepository categoryRepository, ILessonRepository lessonRepository )
+        public FlashcardController(IFlashcardRepository flashcardRepository, ILessonRepository lessonRepository, IFlashcardCategoryRepository categoryRepository)
         {
             _flashcardRepository = flashcardRepository;
-            _categoryRepository = categoryRepository;
             _lessonRepository = lessonRepository;
+            _categoryRepository = categoryRepository;
+        }
+
+        [HttpGet("lesson/{lessonId}")]
+        public async Task<IActionResult> GetFlashcardsByLesson(int lessonId)
+        {
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userId))
+                return Unauthorized("Invalid token.");
+
+            var lesson = await _lessonRepository.GetByIdAsync(lessonId);
+            if (lesson == null)
+                return NotFound("Lesson not found.");
+
+            var category = await _categoryRepository.GetByIdAsync(lesson.CategoryId);
+            if (category == null || category.UserId != userId)
+                return Forbid("You can only access your own flashcards.");
+
+            var flashcards = await _flashcardRepository.GetByLessonIdAsync(lessonId);
+            var flashcardDtos = flashcards.Select(f => new FlashcardDto
+            {
+                Id = f.Id,
+                LessonId = f.LessonId,
+                Word = f.Word,
+                Translation = f.Translation,
+                ExampleUsage = f.ExampleUsage,
+                Tags = f.Tags,
+                Difficulty = f.Difficulty
+            }).ToList();
+
+            return Ok(flashcardDtos);
         }
 
         [HttpPost]
-        public async Task<IActionResult> CreateFlashcard([FromBody] FlashcardRequest request)
+        public async Task<IActionResult> CreateFlashcard([FromBody] FlashcardRequestDto request)
         {
             var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             if (string.IsNullOrEmpty(userId))
@@ -38,8 +68,7 @@ namespace FlashcardApp.Web.Controllers
             if (lesson == null)
                 return NotFound("Lesson not found.");
 
-            // Sprawdzenie, czy lekcja należy do użytkownika (przez kategorię)
-            var category = await _categoryRepository.GetByIdAsync(lesson.CategoryId); // Zakładając, że masz _categoryRepository wstrzyknięte
+            var category = await _categoryRepository.GetByIdAsync(lesson.CategoryId);
             if (category == null || category.UserId != userId)
                 return Forbid("You can only add flashcards to your own lessons.");
 
@@ -50,128 +79,23 @@ namespace FlashcardApp.Web.Controllers
                 Translation = request.Translation,
                 ExampleUsage = request.ExampleUsage,
                 Tags = request.Tags ?? new string[] { },
-                Difficulty = request.Difficulty ?? "Medium"
+                Difficulty = request.Difficulty ?? "Medium",
+                CreatedAt = DateTime.UtcNow
             };
 
             await _flashcardRepository.AddAsync(flashcard);
-            return Ok(flashcard);
-        }
-
-        [HttpGet("{id}")]
-        public async Task<IActionResult> GetFlashcard(int id)
-        {
-            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            if (string.IsNullOrEmpty(userId))
-                return Unauthorized("Invalid token.");
-
-            var flashcard = await _flashcardRepository.GetByIdAsync(id);
-            if (flashcard == null)
-                return NotFound();
-
-            var category = await _categoryRepository.GetByIdAsync(flashcard.CategoryId);
-            if (category == null)
-                return NotFound("Category not found.");
-
-            // Sprawdzenie, czy kategoria należy do użytkownika lub jest publiczna
-            if (category.UserId != userId && !category.IsPublic)
-                return Forbid("You can only view flashcards in your own categories or public ones.");
-
-            return Ok(flashcard);
-        }
-
-        [HttpGet("category/{categoryId}")]
-        public async Task<IActionResult> GetFlashcardsByCategory(int categoryId)
-        {
-            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            if (string.IsNullOrEmpty(userId))
-                return Unauthorized("Invalid token.");
-
-            var category = await _categoryRepository.GetByIdAsync(categoryId);
-            if (category == null)
-                return NotFound("Category not found.");
-
-            // Sprawdzenie, czy kategoria należy do użytkownika lub jest publiczna
-            if (category.UserId != userId && !category.IsPublic)
-                return Forbid("You can only view flashcards in your own categories or public ones.");
-
-            var flashcards = await _flashcardRepository.GetAllByCategoryIdAsync(categoryId);
-            return Ok(flashcards);
-        }
-
-        [HttpGet("search")]
-        public async Task<IActionResult> SearchFlashcards(string word)
-        {
-            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            if (string.IsNullOrEmpty(userId))
-                return Unauthorized("Invalid token.");
-
-            if (string.IsNullOrEmpty(word))
-                return BadRequest("Search term is required.");
-
-            // Wyszukiwanie tylko w kategoriach użytkownika lub publicznych
-            var flashcards = await _flashcardRepository.SearchByWordAsync(word);
-            var allowedFlashcards = new List<Flashcard>();
-
-            foreach (var flashcard in flashcards)
+            var flashcardDto = new FlashcardDto
             {
-                var category = await _categoryRepository.GetByIdAsync(flashcard.CategoryId);
-                if (category != null && (category.UserId == userId || category.IsPublic))
-                {
-                    allowedFlashcards.Add(flashcard);
-                }
-            }
+                Id = flashcard.Id,
+                LessonId = flashcard.LessonId,
+                Word = flashcard.Word,
+                Translation = flashcard.Translation,
+                ExampleUsage = flashcard.ExampleUsage,
+                Tags = flashcard.Tags,
+                Difficulty = flashcard.Difficulty
+            };
 
-            return Ok(allowedFlashcards);
-        }
-
-        [HttpPut("{id}")]
-        public async Task<IActionResult> UpdateFlashcard(int id, [FromBody] Flashcard flashcard)
-        {
-            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            if (string.IsNullOrEmpty(userId))
-                return Unauthorized("Invalid token.");
-
-            if (id != flashcard.Id)
-                return BadRequest("Invalid ID.");
-
-            var existingFlashcard = await _flashcardRepository.GetByIdAsync(id);
-            if (existingFlashcard == null)
-                return NotFound();
-
-            var category = await _categoryRepository.GetByIdAsync(existingFlashcard.CategoryId);
-            if (category == null)
-                return NotFound("Category not found.");
-
-            // Sprawdzenie, czy kategoria należy do użytkownika
-            if (category.UserId != userId)
-                return Forbid("You can only update flashcards in your own categories.");
-
-            flashcard.CategoryId = existingFlashcard.CategoryId; // Zapobiega zmianie kategorii
-            await _flashcardRepository.UpdateAsync(flashcard);
-            return NoContent();
-        }
-
-        [HttpDelete("{id}")]
-        public async Task<IActionResult> DeleteFlashcard(int id)
-        {
-            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            if (string.IsNullOrEmpty(userId))
-                return Unauthorized("Invalid token.");
-
-            var flashcard = await _flashcardRepository.GetByIdAsync(id);
-            if (flashcard == null)
-                return NotFound();
-
-            var category = await _categoryRepository.GetByIdAsync(flashcard.CategoryId);
-            if (category == null)
-                return NotFound("Category not found.");
-
-            // Sprawdzenie, czy kategoria należy do użytkownika
-            if (category.UserId != userId)
-                return Forbid("You can only delete flashcards in your own categories.");
-
-            await _flashcardRepository.DeleteAsync(id);
-            return NoContent();
+            return Ok(flashcardDto);
         }
     }
 }
